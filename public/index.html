@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Flashproxy Dashboard</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="page page-welcome" id="page-welcome">
+    <div class="brand-bar">FLASHPROXY</div>
+    <main class="hero">
+      <p class="hero-eyebrow">We are Flashproxy</p>
+      <h1 class="hero-title">WELCOME<br />TO YOUR<br />DASHBOARD</h1>
+    </main>
+  </div>
+
+  <div class="page page-login" id="page-login">
+    <div class="brand-bar">FLASHPROXY</div>
+    <main class="hero hero-login">
+      <p class="hero-eyebrow">Secure Access</p>
+      <h1 class="hero-title hero-title-sm">ENTER YOUR<br />API KEY</h1>
+      <p class="hero-sub">Connect your reseller account to continue</p>
+      <form id="login-form" class="login-form-mono">
+        <input
+          type="password"
+          id="api-key"
+          class="login-input-mono"
+          placeholder="fp_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          autocomplete="off"
+        />
+        <p class="login-error" id="login-error"></p>
+        <button type="submit" class="outline-button">Continue</button>
+      </form>
+    </main>
+  </div>
+
+  <div class="page page-app" id="page-app">
+    <aside class="sidebar">
+      <div class="sidebar-brand">Flashproxy</div>
+      <nav class="sidebar-nav">
+        <button class="nav-item active" data-view="overview">Overview</button>
+        <button class="nav-item" data-view="balance">Balance</button>
+        <button class="nav-item" data-view="plans">Plans</button>
+        <button class="nav-item" data-view="dedicated-isp">Dedicated ISP</button>
+        <button class="nav-item" data-view="metrics">Metrics</button>
+        <button class="nav-item" data-view="sub-users">Sub-Users</button>
+        <button class="nav-item" data-view="usage">Usage</button>
+      </nav>
+      <button class="sidebar-logout" id="logout-button">Log out</button>
+    </aside>
+    <main class="app-main">
+      <header class="app-topbar">
+        <h1 class="app-title" id="view-title">Overview</h1>
+        <span class="app-key-badge" id="app-key-badge">Connected</span>
+      </header>
+      <section id="view-content" class="view-content"></section>
+    </main>
+  </div>
+
+  <script src="app.js" defer></script>
+</body>
+</html>
