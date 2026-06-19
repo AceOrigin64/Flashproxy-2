@@ -32,6 +32,13 @@ revealLetters(document.querySelector("#page-welcome .hero-title"), 0.045, 0.6);
 setTimeout(() => {
   welcomePage.classList.add("leaving");
   loginPage.classList.add("entering");
+  // The logo lives outside both pages (fixed, shared), so it never
+  // moves during the page transition -- only this pop in place,
+  // timed to the same 1.8s duration as the page's own fade/scale.
+  document.getElementById("shared-logo").animate(
+    [{ transform: "translateX(-50%) scale(1)" }, { transform: "translateX(-50%) scale(1.5)" }, { transform: "translateX(-50%) scale(1)" }],
+    { duration: 1800, easing: "ease" }
+  );
 }, 3200);
 
 // ---------------------------------------------------------------------
