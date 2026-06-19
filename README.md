@@ -2,6 +2,8 @@
 
 Standalone Flashproxy reseller dashboard. No browser extension required — runs as a normal local website.
 
+![Usage Tab After Loading Completely](screenshots/usage-tab-after-loading-completely.png)
+
 ## Why this exists
 
 The [Flashproxy-API-Dashboard](https://github.com/AceOrigin64/Flashproxy-API-Dashboard) browser extension kept hitting CORS errors when fetching the real API directly from the browser. This version sidesteps that entirely: a small Node/Express server proxies API calls server-side, so the browser only ever talks to `localhost` (same-origin, no CORS possible).
