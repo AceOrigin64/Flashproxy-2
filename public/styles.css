@@ -39,7 +39,7 @@ html, body {
 
 .shared-logo {
   position: fixed;
-  top: 28px;
+  top: calc(28px + 10vh);
   left: 45%;
   display: flex;
   align-items: center;
