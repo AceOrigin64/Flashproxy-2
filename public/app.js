@@ -32,11 +32,15 @@ revealLetters(document.querySelector("#page-welcome .hero-title"), 0.045, 0.6);
 setTimeout(() => {
   welcomePage.classList.add("leaving");
   loginPage.classList.add("entering");
-  // The logo lives outside both pages (fixed, shared), so it never
-  // moves during the page transition -- only this pop in place,
-  // timed to the same 1.8s duration as the page's own fade/scale.
-  document.getElementById("shared-logo").animate(
-    [{ transform: "translateX(-50%) scale(1)" }, { transform: "translateX(-50%) scale(1.5)" }, { transform: "translateX(-50%) scale(1)" }],
+  // The logo+text lives outside both pages (fixed, shared), so it never
+  // moves during the page transition -- only this pop in place, timed
+  // to the same 1.8s duration as the page's own fade/scale. Switches to
+  // dark text at the same moment since the Login page's background is
+  // light (the Welcome page's is dark purple, needing white text).
+  const sharedLogo = document.getElementById("shared-logo");
+  sharedLogo.classList.add("on-light");
+  sharedLogo.animate(
+    [{ transform: "translateX(-50%) scale(1)" }, { transform: "translateX(-50%) scale(2)" }, { transform: "translateX(-50%) scale(1)" }],
     { duration: 1800, easing: "ease" }
   );
 }, 3200);
@@ -123,6 +127,7 @@ loginForm.addEventListener("submit", async (e) => {
     document.getElementById("app-key-badge").innerHTML = `Connected with <code>${maskKey(apiKey)}</code>`;
     loginPage.classList.add("leaving");
     appPage.classList.add("entering");
+    document.getElementById("shared-logo").classList.add("hidden");
     renderView("overview");
     const who = await apiGet("/_internal/whoami").catch(() => ({ isAdmin: false }));
     document.getElementById("audit-log-button").classList.toggle("hidden", !who.isAdmin);
@@ -142,6 +147,7 @@ document.getElementById("logout-button").addEventListener("click", () => {
   document.getElementById("api-key").value = "";
   document.getElementById("login-error").textContent = "";
   document.getElementById("audit-log-button").classList.add("hidden");
+  document.getElementById("shared-logo").classList.remove("hidden");
 });
 
 document.getElementById("audit-log-button").addEventListener("click", () => {

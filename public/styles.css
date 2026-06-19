@@ -37,43 +37,34 @@ html, body {
   pointer-events: none;
 }
 
-.brand-bar {
-  position: absolute;
-  top: 31px;
-  left: calc(50% + 21px);
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: #fff;
-  opacity: 0;
-  animation: fadeUpLeft 0.7s ease 0.1s both;
-}
-
-@keyframes fadeUpLeft {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 .shared-logo {
   position: fixed;
   top: 28px;
   left: 50%;
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   transform: translateX(-50%);
   z-index: 50;
   opacity: 0;
   animation: fadeUpCenter 0.7s ease 0.1s both;
 }
 
-.page-login .brand-bar {
+.shared-logo-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  display: block;
+}
+
+.shared-logo span {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #fff;
+}
+
+.shared-logo.on-light span {
   color: #18181B;
 }
 
