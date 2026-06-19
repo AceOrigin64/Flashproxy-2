@@ -42,7 +42,7 @@ setTimeout(() => {
   const sharedLogo = document.getElementById("shared-logo");
   sharedLogo.classList.add("on-light");
   sharedLogo.animate(
-    [{ transform: "translateX(calc(-50% - 25px)) scale(2)" }, { transform: "translateX(calc(-50% - 25px)) scale(1)" }],
+    [{ transform: "translateX(-50%) scale(2)" }, { transform: "translateX(-50%) scale(1)" }],
     { duration: 1800, easing: "ease", fill: "forwards" }
   );
 }, 3200);

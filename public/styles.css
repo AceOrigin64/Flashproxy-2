@@ -40,11 +40,11 @@ html, body {
 .shared-logo {
   position: fixed;
   top: calc(28px + 10vh);
-  left: 40%;
+  left: 50%;
   display: flex;
   align-items: center;
   gap: 8px;
-  transform: translateX(calc(-50% - 25px));
+  transform: translateX(-50%);
   z-index: 50;
   opacity: 0;
   animation: fadeUpCenter 0.7s ease 0.1s both;
@@ -71,11 +71,11 @@ html, body {
 @keyframes fadeUpCenter {
   from {
     opacity: 0;
-    transform: translate(calc(-50% - 25px), 10px) scale(2);
+    transform: translate(-50%, 10px) scale(2);
   }
   to {
     opacity: 1;
-    transform: translate(calc(-50% - 25px), 0) scale(2);
+    transform: translate(-50%, 0) scale(2);
   }
 }
 
