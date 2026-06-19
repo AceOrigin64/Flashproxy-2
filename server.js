@@ -2,14 +2,19 @@ require("dotenv").config();
 const express = require("express");
 const path = require("path");
 const fs = require("fs");
+const os = require("os");
 
 const PORT = process.env.PORT || 4000;
 const API_BASE = "https://rapi.flashproxy.com/api/v1";
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY || "";
-const AUDIT_LOG_PATH = path.join(__dirname, "audit.log");
+// os.tmpdir() instead of __dirname -- Vercel's serverless filesystem is
+// read-only everywhere except /tmp, so writing next to the source would
+// silently fail there. Locally this just resolves to the normal system
+// temp dir, which is fine too.
+const AUDIT_LOG_PATH = path.join(os.tmpdir(), "flashproxy2-audit.log");
 const AUDIT_LOG_MAX_ENTRIES = 500;
-const CLIENTS_HISTORY_PATH = path.join(__dirname, "clients-history.log");
-const CLIENTS_SNAPSHOT_PATH = path.join(__dirname, "clients-snapshot.json");
+const CLIENTS_HISTORY_PATH = path.join(os.tmpdir(), "flashproxy2-clients-history.log");
+const CLIENTS_SNAPSHOT_PATH = path.join(os.tmpdir(), "flashproxy2-clients-snapshot.json");
 const CLIENTS_HISTORY_MAX_ENTRIES = 500;
 
 const app = express();
@@ -197,6 +202,14 @@ app.use("/api", async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Flashproxy-2 running at http://localhost:${PORT}`);
-});
+// Vercel's Node builder imports this file and calls the exported app
+// directly per-request -- it never calls listen(). Local `npm start`
+// still needs the real listener, so only start one when this file is
+// run directly (not imported as a module).
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Flashproxy-2 running at http://localhost:${PORT}`);
+  });
+}
+
+module.exports = app;
