@@ -6,3 +6,4 @@ Thumbs.db
 clients-snapshot.json
 
 .vercel
+.env*
