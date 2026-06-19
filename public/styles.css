@@ -40,7 +40,7 @@ html, body {
 .shared-logo {
   position: fixed;
   top: calc(28px + 10vh);
-  left: 100%;
+  left: 60%;
   display: flex;
   align-items: center;
   gap: 8px;
