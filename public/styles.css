@@ -71,11 +71,11 @@ html, body {
 @keyframes fadeUpCenter {
   from {
     opacity: 0;
-    transform: translate(-50%, 10px);
+    transform: translate(-50%, 10px) scale(2);
   }
   to {
     opacity: 1;
-    transform: translate(-50%, 0);
+    transform: translate(-50%, 0) scale(2);
   }
 }
 

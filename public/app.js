@@ -33,14 +33,16 @@ setTimeout(() => {
   welcomePage.classList.add("leaving");
   loginPage.classList.add("entering");
   // The logo+text lives outside both pages (fixed, shared), so it never
-  // moves during the page transition -- only this pop in place, timed
-  // to the same 1.8s duration as the page's own fade/scale. Switches to
-  // dark text at the same moment since the Login page's background is
-  // light (the Welcome page's is dark purple, needing white text).
+  // moves during the page transition -- only this shrink in place,
+  // timed to the same 1.8s duration as the page's own fade/scale. Sits
+  // at 2x on the Welcome page (baked into the fadeUpCenter keyframe),
+  // shrinks to 1x for the Login page. Switches to dark text at the
+  // same moment since Login's background is light (Welcome's is dark
+  // purple, needing white text).
   const sharedLogo = document.getElementById("shared-logo");
   sharedLogo.classList.add("on-light");
   sharedLogo.animate(
-    [{ transform: "translateX(-50%) scale(1)" }, { transform: "translateX(-50%) scale(2)" }],
+    [{ transform: "translateX(-50%) scale(2)" }, { transform: "translateX(-50%) scale(1)" }],
     { duration: 1800, easing: "ease", fill: "forwards" }
   );
 }, 3200);
