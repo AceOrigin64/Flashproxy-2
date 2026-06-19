@@ -668,8 +668,12 @@ html, body {
   margin-bottom: 22px;
 }
 
+.view-content {
+  transition: opacity 0.15s ease;
+}
+
 .app-title {
-  font-size: 26px;
+  font-size: 39px;
   font-weight: 800;
   color: #18181B;
   letter-spacing: -0.01em;
@@ -869,27 +873,54 @@ table.data-table tr:last-child td {
   border-color: #fff;
 }
 
+.buy-button-orange {
+  background: #f59e0b;
+  color: #18181B;
+  border: 1px solid #f59e0b;
+}
+
+.buy-button-orange:hover {
+  background: #fbbf24;
+  border-color: #fbbf24;
+}
+
 .topup-note-dark {
   color: rgba(255, 255, 255, 0.65);
 }
 
-.purchase-dropdown summary {
+.purchase-dropdown {
+  width: 40%;
+  margin-top: 60px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.purchase-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   cursor: pointer;
-  list-style: none;
 }
 
-.purchase-dropdown summary::-webkit-details-marker {
-  display: none;
-}
-
-.purchase-dropdown summary::after {
-  content: "▾";
-  float: right;
+.purchase-caret {
   color: rgba(255, 255, 255, 0.65);
+  transition: transform 0.25s ease;
 }
 
-.purchase-dropdown[open] summary::after {
-  content: "▴";
+.purchase-dropdown.open .purchase-caret {
+  transform: rotate(180deg);
+}
+
+.purchase-content {
+  overflow: hidden;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.table-scroll table.data-table {
+  white-space: nowrap;
 }
 
 .purchase-options {

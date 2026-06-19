@@ -14,6 +14,7 @@ const CLIENTS_HISTORY_MAX_ENTRIES = 500;
 
 const app = express();
 app.use(express.static(path.join(__dirname, "public")));
+app.use(express.json());
 
 function maskKey(key) {
   if (!key) return "(none)";
@@ -153,12 +154,16 @@ app.get("/api/_internal/client-history", (req, res) => {
 app.use("/api", async (req, res) => {
   const targetUrl = API_BASE + req.url;
   const rawKey = getBearerKey(req);
+  const hasBody = !["GET", "HEAD"].includes(req.method);
   try {
     const upstream = await fetch(targetUrl, {
       method: req.method,
       headers: {
         Authorization: req.headers.authorization || "",
+        ...(hasBody ? { "Content-Type": "application/json" } : {}),
+        ...(req.headers["x-idempotency-key"] ? { "X-Idempotency-Key": req.headers["x-idempotency-key"] } : {}),
       },
+      body: hasBody ? JSON.stringify(req.body) : undefined,
     });
     const body = await upstream.text();
     appendAudit({

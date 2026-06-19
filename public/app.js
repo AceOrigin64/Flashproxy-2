@@ -61,6 +61,33 @@ async function apiGet(path) {
   return json.data;
 }
 
+// POST helper that does NOT throw on non-2xx -- purchase flows need to
+// branch on the exact status (402 insufficient balance vs. other
+// errors), not just fail generically.
+async function apiPost(path, body, idempotencyKey) {
+  let res;
+  try {
+    res = await fetch("/api" + path, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${currentApiKey}`,
+        "Content-Type": "application/json",
+        ...(idempotencyKey ? { "X-Idempotency-Key": idempotencyKey } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    return { status: 0, json: null, networkError: true };
+  }
+  let json = null;
+  try {
+    json = await res.json();
+  } catch {
+    // non-JSON response, leave json null
+  }
+  return { status: res.status, json };
+}
+
 // ---------------------------------------------------------------------
 // Login -- the entered key must be accepted by the real /balance
 // endpoint. Wrong or missing key -> server's own error message.
@@ -184,16 +211,22 @@ const ADMIN_VIEW_TITLES = {
   "audit-log": "Audit Log",
 };
 
+let adminRenderToken = 0;
+
 async function renderAdminView(view) {
+  const myToken = ++adminRenderToken;
   const titleEl = document.getElementById("admin-view-title");
   const contentEl = document.getElementById("admin-view-content");
   titleEl.textContent = ADMIN_VIEW_TITLES[view];
   contentEl.innerHTML = `<div class="panel">Loading...</div>`;
   try {
-    contentEl.innerHTML = await ADMIN_RENDERERS[view]();
+    const html = await ADMIN_RENDERERS[view]();
+    if (myToken !== adminRenderToken) return;
+    contentEl.innerHTML = html;
     if (view === "users") setupUsersListFilter();
     if (view === "client-info") setupClientInfoFilter();
   } catch (err) {
+    if (myToken !== adminRenderToken) return;
     contentEl.innerHTML = `
       <div class="panel">
         <div class="panel-title">Couldn't load this view</div>
@@ -277,16 +310,19 @@ function setupClientInfoFilter() {
   setupClientSpeedToggles();
   const toggle = document.querySelector('.range-toggle[data-client-filter="true"]');
   if (!toggle) return;
+  const container = document.getElementById("client-cards-container");
   toggle.querySelectorAll("button").forEach((btn) => {
     btn.addEventListener("click", () => {
       toggle.querySelectorAll("button").forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
       const filter = btn.dataset.filter;
-      const filtered = filter === "active" ? allClientGroups.filter((g) => g.isActive) : allClientGroups;
-      document.getElementById("client-cards-container").innerHTML = filtered.length
-        ? filtered.map(clientCardHtml).join("")
-        : `<div class="panel"><p>No clients in this filter.</p></div>`;
-      setupClientSpeedToggles();
+      fadeSwap(container, () => {
+        const filtered = filter === "active" ? allClientGroups.filter((g) => g.isActive) : allClientGroups;
+        container.innerHTML = filtered.length
+          ? filtered.map(clientCardHtml).join("")
+          : `<div class="panel"><p>No clients in this filter.</p></div>`;
+        setupClientSpeedToggles();
+      });
     });
   });
 }
@@ -301,13 +337,18 @@ function setupClientSpeedToggles() {
         btn.classList.add("active");
         const hours = btn.dataset.hours;
         document.getElementById(`client-speed-chart-${slug}`).innerHTML = buildLineChartSvg(hours);
-        const metricsResults = await Promise.all(
-          planIds.map((id) => apiGet(`/plans/${id}/metrics/summary?hours=${hours}`).catch(() => null))
-        );
-        const valid = metricsResults.filter(Boolean);
-        const avgMbps = valid.length ? valid.reduce((s, m) => s + m.avg_mbps, 0) / valid.length : 0;
-        const peakMbps = valid.length ? Math.max(...valid.map((m) => m.peak_mbps)) : 0;
-        document.getElementById(`client-speed-value-${slug}`).innerHTML = `${mbpsToMBps(avgMbps)} MBps <span class="graph-sub">peak ${mbpsToMBps(peakMbps)} MBps, over last ${hours}h</span>`;
+        const valueEl = document.getElementById(`client-speed-value-${slug}`);
+        try {
+          const metricsResults = await Promise.all(
+            planIds.map((id) => apiGet(`/plans/${id}/metrics/summary?hours=${hours}`).catch(() => null))
+          );
+          const valid = metricsResults.filter(Boolean);
+          const avgMbps = valid.length ? valid.reduce((s, m) => s + m.avg_mbps, 0) / valid.length : 0;
+          const peakMbps = valid.length ? Math.max(...valid.map((m) => m.peak_mbps)) : 0;
+          valueEl.innerHTML = `${mbpsToMBps(avgMbps)} MBps <span class="graph-sub">peak ${mbpsToMBps(peakMbps)} MBps, over last ${hours}h</span>`;
+        } catch (err) {
+          valueEl.textContent = `Couldn't load this range: ${err.message}`;
+        }
       });
     });
   });
@@ -316,13 +357,16 @@ function setupClientSpeedToggles() {
 function setupUsersListFilter() {
   const toggle = document.querySelector('.range-toggle[data-users-filter="true"]');
   if (!toggle) return;
+  const container = document.getElementById("users-list-container");
   toggle.querySelectorAll("button").forEach((btn) => {
     btn.addEventListener("click", () => {
       toggle.querySelectorAll("button").forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
       const filter = btn.dataset.filter;
-      const filtered = filter === "active" ? allClientGroups.filter((g) => g.isActive) : allClientGroups;
-      document.getElementById("users-list-container").innerHTML = usersListTable(filtered);
+      fadeSwap(container, () => {
+        const filtered = filter === "active" ? allClientGroups.filter((g) => g.isActive) : allClientGroups;
+        container.innerHTML = usersListTable(filtered);
+      });
     });
   });
 }
@@ -481,32 +525,57 @@ const VIEW_TITLES = {
   plans: "Plans",
   "dedicated-isp": "Dedicated ISP",
   metrics: "Metrics",
-  "sub-users": "Sub-Users",
   usage: "Usage",
 };
 
+let viewRenderToken = 0;
+
 async function renderView(view) {
+  const myToken = ++viewRenderToken;
   const titleEl = document.getElementById("view-title");
   const contentEl = document.getElementById("view-content");
   titleEl.textContent = VIEW_TITLES[view];
-  contentEl.innerHTML = `<div class="panel">Loading...</div>`;
+
+  // Stays faded out (opacity 0) through the loading state too -- fading
+  // the black "Loading..." panel in and then immediately back out for
+  // fast tabs was what showed up as a flashing black bar at the top.
+  contentEl.style.opacity = "0";
+  await new Promise((r) => setTimeout(r, 150));
+  if (myToken !== viewRenderToken) return;
+
+  const isUsageUncached = view === "usage" && !(usageCache.day && Date.now() - usageCache.day.ts < USAGE_CACHE_TTL_MS);
+  contentEl.innerHTML = isUsageUncached
+    ? `<div class="panel" style="color:#fff;">Loading... Flashproxy's usage endpoint runs a heavy aggregation and can take up to 30s.</div>`
+    : `<div class="panel" style="color:#fff;">Loading...</div>`;
   try {
-    contentEl.innerHTML = await RENDERERS[view]();
-    if (view === "overview") setupClientProxyDropdown();
+    const html = await RENDERERS[view]();
+    // A slow tab (Usage, ~30s) can still be in flight when the user
+    // switches to a faster tab. Without this check, whichever fetch
+    // finishes LAST wins and overwrites the screen, regardless of
+    // which tab is actually selected -- exactly the bug seen where the
+    // nav/title said "Metrics" but the content was stale Usage HTML.
+    if (myToken !== viewRenderToken) return;
+    contentEl.innerHTML = html;
+    contentEl.style.opacity = "1";
     if (view === "metrics") setupMetricsGraphs();
-    if (view === "plans") setupPlansFilter();
+    if (view === "plans") {
+      setupPlansFilter();
+      setupPurchaseDropdown();
+      setupBuyButtons();
+    }
     if (view === "usage") setupUsageGraph();
   } catch (err) {
+    if (myToken !== viewRenderToken) return;
     contentEl.innerHTML = `
       <div class="panel">
         <div class="panel-title">Couldn't load this view</div>
         <p>${err.message}</p>
       </div>
     `;
+    contentEl.style.opacity = "1";
   }
 }
 
-let activeClientPlans = [];
 let currentMetricsPlanId = null;
 let allFetchedPlans = [];
 
@@ -518,6 +587,8 @@ const RANGE_OPTIONS = [
   { label: "24hrs", hours: 24 },
 ];
 
+const METRICS_SUPPORTED_PRODUCTS = ["datacenter", "shared_isp", "isp_eu", "ipv6-residential", "ipv6-datacenter"];
+
 const MBPS_SCALE = 1000;
 const CHART_W = 600;
 const CHART_H = 140;
@@ -525,10 +596,16 @@ const CHART_PAD_L = 44;
 const CHART_PAD_B = 24;
 
 function buildLineChartSvg(hours) {
+  const h = Number(hours);
   const plotW = CHART_W - CHART_PAD_L - 10;
   const plotH = CHART_H - CHART_PAD_B - 10;
   const baseY = 10 + plotH;
-  const ticks = 6;
+  // 1hr is the one range too short to show meaningfully in hours, so it
+  // gets its own minute-based ticks (0-60m). Every other range keeps a
+  // tick count that evenly divides it, otherwise rounding collapses
+  // several x-axis labels onto the same value.
+  const useMinutes = h === 1;
+  const ticks = useMinutes ? 6 : Math.max(1, Math.min(6, h));
   const points = [];
   for (let i = 0; i <= ticks; i++) {
     const x = CHART_PAD_L + (plotW * i) / ticks;
@@ -543,8 +620,8 @@ function buildLineChartSvg(hours) {
   const xLabels = points
     .map((pt, i) => {
       const x = pt.split(",")[0];
-      const labelHours = Math.round((hours * i) / ticks);
-      return `<text x="${x}" y="${CHART_H - 6}" class="chart-axis-label" text-anchor="middle">${labelHours}h</text>`;
+      const label = useMinutes ? `${(60 * i) / ticks}m` : `${(h * i) / ticks}h`;
+      return `<text x="${x}" y="${CHART_H - 6}" class="chart-axis-label" text-anchor="middle">${label}</text>`;
     })
     .join("");
   return `
@@ -560,6 +637,24 @@ function buildLineChartSvg(hours) {
 
 function mbpsToMBps(mbps) {
   return (mbps / 8).toFixed(2);
+}
+
+// Fades `el` out, runs `applyFn` (sync or async) to swap its content,
+// then fades back in. Used on every toggle (All/Active, time-range
+// buttons) so switching feels deliberate instead of an instant snap --
+// and because applyFn runs inside a try/catch, a failed fetch mid-toggle
+// shows a real error instead of silently leaving stale/blank content.
+async function fadeSwap(el, applyFn) {
+  if (!el) return;
+  el.style.transition = "opacity 0.3s ease";
+  el.style.opacity = "0";
+  await new Promise((r) => setTimeout(r, 300));
+  try {
+    await applyFn();
+  } catch (err) {
+    el.innerHTML = `<div class="panel"><div class="panel-title">Couldn't load this</div><p>${err.message}</p></div>`;
+  }
+  el.style.opacity = "1";
 }
 
 function metricGraph(key, title, mbps, hours) {
@@ -587,6 +682,24 @@ const USAGE_PERIODS = [
   { label: "Week", value: "week" },
   { label: "Month", value: "month" },
 ];
+
+// Flashproxy's /usage/summary runs a heavy server-side aggregation and
+// regularly takes ~30s to respond (confirmed by timing the real upstream
+// API directly, not just our proxy) -- nothing to optimize client-side.
+// This cache just avoids re-paying that 30s every time you revisit the
+// tab or flip back to a period you already loaded this session.
+const usageCache = {};
+const USAGE_CACHE_TTL_MS = 60000;
+
+async function getUsageCached(period) {
+  const cached = usageCache[period];
+  if (cached && Date.now() - cached.ts < USAGE_CACHE_TTL_MS) {
+    return cached.data;
+  }
+  const data = await apiGet(`/usage/summary?period=${period}`);
+  usageCache[period] = { data, ts: Date.now() };
+  return data;
+}
 
 function usagePeriodTicks(period) {
   switch (period) {
@@ -664,9 +777,160 @@ function setupUsageGraph() {
       btn.classList.add("active");
       const period = btn.dataset.period;
       document.getElementById("usage-chart").innerHTML = buildUsageChartSvg(period, usagePeriodTicks(period));
-      const usage = await apiGet(`/usage/summary?period=${period}`);
-      const totalGb = usage.summary?.total_gb ?? 0;
-      document.getElementById("usage-graph-note").textContent = `Flashproxy's API returns a single total for the chosen period (no per-interval breakdown for this account yet), so the line is plotted at 0 — real total used over the last ${period} is ${totalGb} GB.`;
+      const noteEl = document.getElementById("usage-graph-note");
+      const isCached = usageCache[period] && Date.now() - usageCache[period].ts < USAGE_CACHE_TTL_MS;
+      if (!isCached) {
+        noteEl.textContent = "Loading... Flashproxy's usage endpoint runs a heavy aggregation and can take up to 30s.";
+      }
+      try {
+        const usage = await getUsageCached(period);
+        const totalGb = usage.summary?.total_gb ?? 0;
+        noteEl.textContent = `Flashproxy's API returns a single total for the chosen period (no per-interval breakdown for this account yet), so the line is plotted at 0 — real total used over the last ${period} is ${totalGb} GB.`;
+      } catch (err) {
+        noteEl.textContent = `Couldn't load this period: ${err.message}`;
+      }
+    });
+  });
+}
+
+// Animates scrollTop by `delta` over `duration`ms with the same easing
+// curve as the height animation below, so the page scroll and the
+// dropdown's expansion visibly move together instead of the scroll
+// happening separately (instant jump or a differently-timed native
+// smooth-scroll).
+function animateScrollBy(container, delta, duration) {
+  const start = container.scrollTop;
+  const startTime = performance.now();
+  function step(now) {
+    const t = Math.min(1, (now - startTime) / duration);
+    const eased = 1 - Math.pow(1 - t, 2); // ease-out, matches CSS "ease" closely enough
+    container.scrollTop = start + delta * eased;
+    if (t < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+function setupPurchaseDropdown() {
+  const wrapper = document.getElementById("purchase-dropdown");
+  const summary = document.getElementById("purchase-summary");
+  const content = document.getElementById("purchase-content");
+  if (!wrapper || !summary || !content) return;
+  const scrollContainer = wrapper.closest(".app-main") || document.scrollingElement;
+
+  content.style.height = "0px";
+  content.style.overflow = "hidden";
+  let isOpen = false;
+  const ANIM_DURATION = 500;
+
+  summary.addEventListener("click", () => {
+    const targetHeight = content.scrollHeight;
+    if (!isOpen) {
+      content.animate(
+        [{ height: "0px" }, { height: `${targetHeight}px` }],
+        { duration: ANIM_DURATION, easing: "ease" }
+      ).onfinish = () => {
+        content.style.height = "auto";
+      };
+      content.style.height = `${targetHeight}px`;
+      wrapper.classList.add("open");
+      animateScrollBy(scrollContainer, targetHeight, ANIM_DURATION);
+    } else {
+      content.style.height = `${targetHeight}px`;
+      content.animate(
+        [{ height: `${targetHeight}px` }, { height: "0px" }],
+        { duration: ANIM_DURATION, easing: "ease" }
+      ).onfinish = () => {
+        content.style.height = "0px";
+      };
+      wrapper.classList.remove("open");
+      animateScrollBy(scrollContainer, -targetHeight, ANIM_DURATION);
+    }
+    isOpen = !isOpen;
+  });
+}
+
+const BANDWIDTH_ONLY_PRODUCTS = ["residential", "residential-lite", "mobile", "pool1", "pool2", "pool3", "pool4", "pool5"];
+const HYBRID_PRODUCTS = ["datacenter", "shared_isp", "isp_eu", "ipv6-residential", "ipv6-datacenter"];
+
+// Builds a real CreatePlanRequest body. Bandwidth/hybrid products need a
+// GB amount from the user; dedicated_isp needs a pool + quantity;
+// unlimited_residential has no per-purchase input here, so it always
+// buys the cheapest valid option (a trial) rather than guessing a
+// duration/Mbps combo. Returns null if the user cancels the prompt.
+async function buildPurchasePayload(product) {
+  if (BANDWIDTH_ONLY_PRODUCTS.includes(product)) {
+    const gb = Number(window.prompt(`How many GB of ${product} do you want to buy?`, "1"));
+    if (!gb || gb <= 0) return null;
+    return { product, bandwidth_gb: gb };
+  }
+  if (HYBRID_PRODUCTS.includes(product)) {
+    const gb = Number(window.prompt(`How many GB of ${product} do you want to buy? (billed per GB)`, "1"));
+    if (!gb || gb <= 0) return null;
+    return { product, billing_type: "bandwidth", bandwidth_gb: gb };
+  }
+  if (product === "dedicated_isp") {
+    const pools = await apiGet("/proxies/pools").catch(() => null);
+    const bestPool = pools?.pools?.filter((p) => p.inStock).sort((a, b) => b.stock - a.stock)[0];
+    if (!bestPool) {
+      window.alert("No dedicated ISP pools currently in stock.");
+      return null;
+    }
+    const quantity = Number(window.prompt(`How many IPs from pool "${bestPool.pool}" (${bestPool.stock} in stock)?`, "1"));
+    if (!quantity || quantity <= 0) return null;
+    if (quantity > bestPool.stock) {
+      window.alert(`Only ${bestPool.stock} IPs in stock in that pool.`);
+      return null;
+    }
+    return { product, quantity, pool: bestPool.pool };
+  }
+  if (product === "unlimited_residential") {
+    if (!window.confirm("unlimited_residential has no fixed per-purchase amount here, so this buys a 1-hour/200Mbps trial instead. Continue?")) {
+      return null;
+    }
+    return { product, duration: "trial" };
+  }
+  window.alert(`Don't know how to buy "${product}" yet.`);
+  return null;
+}
+
+function setupBuyButtons() {
+  document.querySelectorAll("[data-buy-product]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const product = btn.dataset.buyProduct;
+      const originalText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = "...";
+      try {
+        const payload = await buildPurchasePayload(product);
+        if (!payload) return;
+
+        const priceCheck = await apiPost("/plans/check-price", payload);
+        if (priceCheck.status !== 200 || !priceCheck.json?.success) {
+          window.alert(priceCheck.json?.error?.message || "Couldn't check the price for that purchase.");
+          return;
+        }
+        const cost = priceCheck.json.data.cost_usd;
+        if (!window.confirm(`This will charge $${cost} to your real Flashproxy balance. Buy ${product} now?`)) {
+          return;
+        }
+
+        const idempotencyKey = crypto.randomUUID();
+        const purchase = await apiPost("/plans", payload, idempotencyKey);
+
+        if (purchase.status === 201 && purchase.json?.success) {
+          const plan = purchase.json.data;
+          window.alert(`Purchased. Connection: ${plan.connection?.format ?? "see Plans tab"}\nCost: ${plan.billing?.cost_formatted ?? `$${cost}`}`);
+          renderView("plans");
+        } else if (purchase.status === 402) {
+          window.alert(`Insufficient balance: ${purchase.json?.error?.message ?? "not enough balance for this purchase."}\nOpening flashproxy.com so you can top up.`);
+          window.open("https://www.flashproxy.com/dashboard", "_blank");
+        } else {
+          window.alert(purchase.json?.error?.message || `Purchase failed (${purchase.status}).`);
+        }
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+      }
     });
   });
 }
@@ -674,19 +938,22 @@ function setupUsageGraph() {
 function setupPlansFilter() {
   const toggle = document.querySelector('.range-toggle[data-plans-filter="true"]');
   if (!toggle) return;
+  const container = document.getElementById("plans-table-container");
   toggle.querySelectorAll("button").forEach((btn) => {
     btn.addEventListener("click", () => {
       toggle.querySelectorAll("button").forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
       const filter = btn.dataset.filter;
-      const filtered = filter === "active" ? allFetchedPlans.filter((p) => p.status === "active") : allFetchedPlans;
-      document.getElementById("plans-table-container").innerHTML = plansTable(filtered);
+      fadeSwap(container, () => {
+        const filtered = filter === "active" ? allFetchedPlans.filter((p) => p.status === "active") : allFetchedPlans;
+        container.innerHTML = plansTable(filtered);
+      });
     });
   });
 }
 
 function setupMetricsGraphs() {
-  document.querySelectorAll(".range-toggle").forEach((toggle) => {
+  document.querySelectorAll(".range-toggle[data-metric]").forEach((toggle) => {
     const key = toggle.dataset.metric;
     toggle.querySelectorAll("button").forEach((btn) => {
       btn.addEventListener("click", async () => {
@@ -694,11 +961,16 @@ function setupMetricsGraphs() {
         toggle.querySelectorAll("button").forEach((b) => b.classList.remove("active"));
         btn.classList.add("active");
         const hours = btn.dataset.hours;
-        document.getElementById(`chart-${key}`).innerHTML = buildLineChartSvg(hours);
-        const m = await apiGet(`/plans/${currentMetricsPlanId}/metrics/summary?hours=${hours}`);
-        const mbps = key === "avg" ? m.avg_mbps : m.peak_mbps;
-        const noteEl = document.getElementById(`chart-${key}`).closest(".panel-graph").querySelector(".graph-note");
-        noteEl.textContent = `Flashproxy's API has no per-interval history endpoint, only one aggregate value per window — real current average is ${mbpsToMBps(mbps)} MBps over the last ${hours}h, plotted at 0 above since no minute-by-minute data exists to chart.`;
+        const chartEl = document.getElementById(`chart-${key}`);
+        const panel = chartEl.closest(".panel-graph");
+        chartEl.innerHTML = buildLineChartSvg(hours);
+        try {
+          const m = await apiGet(`/plans/${currentMetricsPlanId}/metrics/summary?hours=${hours}`);
+          const mbps = key === "avg" ? m.avg_mbps : m.peak_mbps;
+          panel.querySelector(".graph-note").textContent = `Flashproxy's API has no per-interval history endpoint, only one aggregate value per window — real current average is ${mbpsToMBps(mbps)} MBps over the last ${hours}h, plotted at 0 above since no minute-by-minute data exists to chart.`;
+        } catch (err) {
+          panel.querySelector(".graph-note").textContent = `Couldn't load this range: ${err.message}`;
+        }
       });
     });
   });
@@ -711,7 +983,6 @@ const RENDERERS = {
       apiGet("/plans?per_page=100"),
     ]);
     const activePlanList = plans.plans.filter((p) => p.status === "active");
-    activeClientPlans = activePlanList;
     return `
       <div class="cards-grid">
         ${statCard("Current Balance", balance.balance_formatted, "Available to spend", "stat-card-purple")}
@@ -725,15 +996,21 @@ const RENDERERS = {
         <div class="panel-title panel-title-light-purple">Proxies Currently Used By Clients</div>
         ${
           activePlanList.length
-            ? `<select id="client-proxy-select" class="dropdown-select">
+            ? `<table class="data-table">
+                <tr><th>Client Reference</th><th>Product</th><th>Proxy Address</th><th>Allowed IPs</th><th>Expires</th></tr>
                 ${activePlanList
                   .map(
-                    (p, i) =>
-                      `<option value="${i}">${p.end_user_reference || p.plan_id.slice(0, 8)} — ${p.product}</option>`
+                    (p) => `
+                  <tr>
+                    <td class="td-light-purple">${p.end_user_reference || "&mdash;"}</td>
+                    <td>${p.product}</td>
+                    <td class="td-light-purple">${p.connection?.format ?? "&mdash;"}</td>
+                    <td>${p.allowed_ips?.length ? p.allowed_ips.join(", ") : "Any"}</td>
+                    <td>${p.expires_at ? new Date(p.expires_at).toLocaleDateString() : "&mdash;"}</td>
+                  </tr>`
                   )
                   .join("")}
-              </select>
-              <div id="client-proxy-details"></div>`
+              </table>`
             : `<p>No proxies currently lent to clients.</p>`
         }
       </div>
@@ -794,7 +1071,7 @@ const RENDERERS = {
     });
     const ranked = Object.entries(counts).sort((a, b) => b[1] - a[1]);
     const [topProduct, topCount] = ranked[0] || ["&mdash;", 0];
-    const products = Object.keys(pricing.products || {});
+    const products = Object.entries(pricing.products || {});
     allFetchedPlans = plans.plans;
     return `
       <div class="panel">
@@ -817,18 +1094,29 @@ const RENDERERS = {
           ${ranked.map(([product, count]) => `<tr><td>${product}</td><td>${count}</td></tr>`).join("")}
         </table>
       </div>
-      <details class="panel panel-darkpurple purchase-dropdown">
-        <summary class="panel-title">Purchase More Options</summary>
-        <div class="purchase-options">
-          ${products
-            .map(
-              (product) =>
-                `<a class="topup-button topup-button-dark" href="https://www.flashproxy.com/dashboard" target="_blank" rel="noopener">${product}</a>`
-            )
-            .join("")}
+      <div class="panel panel-darkpurple purchase-dropdown" id="purchase-dropdown">
+        <div class="purchase-summary" id="purchase-summary">
+          <span class="panel-title">Purchase More Options</span>
+          <span class="purchase-caret">▾</span>
         </div>
-        <p class="topup-note topup-note-dark">Opens flashproxy.com to complete your purchase — purchases aren't processed in this dashboard.</p>
-      </details>
+        <div class="purchase-content" id="purchase-content">
+          <div class="table-scroll">
+            <table class="data-table">
+              <tr><th>Product</th><th>Type</th><th>Price</th><th></th></tr>
+              ${products
+                .map(([product, p]) => `
+                  <tr>
+                    <td>${product}</td>
+                    <td>${p.type}</td>
+                    <td>${pricingCell(p, pricing.currency)}</td>
+                    <td><button class="topup-button buy-button-orange" data-buy-product="${product}">Buy</button></td>
+                  </tr>`)
+                .join("")}
+            </table>
+          </div>
+          <p class="topup-note topup-note-dark">Pricing pulled live from your account. Flashproxy's Reseller API has no checkout/purchase endpoint, so "Buy" opens the real purchase flow on flashproxy.com instead of faking a transaction here.</p>
+        </div>
+      </div>
     `;
   },
 
@@ -856,10 +1144,18 @@ const RENDERERS = {
   },
 
   metrics: async () => {
-    const plans = await apiGet("/plans?per_page=1");
-    const planId = plans.plans[0]?.plan_id;
+    // Flashproxy only supports the metrics endpoint for datacenter,
+    // shared_isp, isp_eu, ipv6-residential, and ipv6-datacenter plans --
+    // every other product 400s with METRICS_NOT_SUPPORTED. Picking just
+    // the newest plan (regardless of product) was the bug: a newer
+    // residential/mobile/etc plan would always 400 here.
+    const plans = await apiGet("/plans?per_page=100");
+    const metricsSupportedPlan = plans.plans.find(
+      (p) => p.status === "active" && METRICS_SUPPORTED_PRODUCTS.includes(p.product)
+    );
+    const planId = metricsSupportedPlan?.plan_id;
     if (!planId) {
-      return `<div class="panel"><div class="panel-title">Metrics</div><p>No plans on this account yet.</p></div>`;
+      return `<div class="panel"><div class="panel-title">Metrics</div><p>No active plan on this account supports metrics. Flashproxy only exposes metrics for datacenter, shared_isp, isp_eu, ipv6-residential, and ipv6-datacenter plans.</p></div>`;
     }
     currentMetricsPlanId = planId;
     const m = await apiGet(`/plans/${planId}/metrics/summary?hours=24`);
@@ -883,35 +1179,9 @@ const RENDERERS = {
     `;
   },
 
-  "sub-users": async () => {
-    const subUsers = await apiGet("/sub-users");
-    const items = subUsers.sub_users || [];
-    if (!items.length) {
-      return `<div class="panel"><div class="panel-title">Sub-Users</div><p>No sub-users yet.</p></div>`;
-    }
-    return items
-      .map(
-        (u, i) => `
-      <div class="panel">
-        <div class="panel-title">Sub User ${i + 1}</div>
-        <div class="cards-grid">
-          ${statCard("Name", u.name ?? "&mdash;", u.email ?? "&mdash;")}
-          ${statCard("Balance", `$${((u.balance_cents ?? 0) / 100).toFixed(2)}`, "Current balance")}
-          ${statCard("Plans", u.plans_count ?? 0, "Active + past plans")}
-        </div>
-        <table class="data-table">
-          <tr><th>Status</th><td><span class="pill pill-active">${u.status ?? "&mdash;"}</span></td></tr>
-          <tr><th>Joined</th><td>${u.created_at ? new Date(u.created_at).toLocaleDateString() : "&mdash;"}</td></tr>
-        </table>
-        <p class="graph-note">FlashProxy's Sub-Users API doesn't link a sub-user to specific plans, so per-plan data usage, billing rate, and speed can't be attributed to this client — only the fields above are available.</p>
-      </div>
-    `
-      )
-      .join("");
-  },
 
   usage: async () => {
-    const usage = await apiGet("/usage/summary?period=day");
+    const usage = await getUsageCached("day");
     return `
       <div class="cards-grid">${statCard("Total Bandwidth", formatBytes(usage.summary?.total_bytes), `This ${usage.time_range?.period}`)}</div>
       ${usageGraph(usage)}
@@ -927,27 +1197,6 @@ const RENDERERS = {
     `;
   },
 };
-
-function setupClientProxyDropdown() {
-  const select = document.getElementById("client-proxy-select");
-  if (!select) return;
-  const renderDetails = () => {
-    const plan = activeClientPlans[select.value];
-    const detailsEl = document.getElementById("client-proxy-details");
-    if (!plan || !detailsEl) return;
-    detailsEl.innerHTML = `
-      <table class="data-table">
-        <tr><th>Client Reference</th><td class="td-light-purple">${plan.end_user_reference || "&mdash;"}</td></tr>
-        <tr><th>Product</th><td>${plan.product}</td></tr>
-        <tr><th>Proxy Address</th><td class="td-light-purple">${plan.connection?.format ?? "&mdash;"}</td></tr>
-        <tr><th>Allowed IPs</th><td>${plan.allowed_ips?.length ? plan.allowed_ips.join(", ") : "Any"}</td></tr>
-        <tr><th>Expires</th><td>${plan.expires_at ? new Date(plan.expires_at).toLocaleDateString() : "&mdash;"}</td></tr>
-      </table>
-    `;
-  };
-  select.addEventListener("change", renderDetails);
-  renderDetails();
-}
 
 function formatBytes(bytes) {
   if (!bytes) return "0 MB";
