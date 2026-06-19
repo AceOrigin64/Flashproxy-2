@@ -163,9 +163,43 @@ async function renderHistoryView() {
   const contentEl = document.getElementById("history-view-content");
   contentEl.innerHTML = `<div class="panel">Loading...</div>`;
   try {
-    const log = await apiGet("/_internal/client-history");
+    const [log, clientGroups] = await Promise.all([
+      apiGet("/_internal/client-history"),
+      fetchClientGroups(),
+    ]);
     const entries = log.entries || [];
-    contentEl.innerHTML = !entries.length
+
+    // "Removed" (a client literally disappearing from /plans) almost
+    // never fires -- Flashproxy keeps cancelled/expired plans visible.
+    // What actually happens is a client's plans all go inactive, which
+    // the add/remove diff can't see. So this cross-references the
+    // current real client list for anyone with zero active plans, in
+    // addition to any literal "Removed" events that did fire.
+    const removedNames = new Set(entries.filter((e) => e.event === "removed").map((e) => e.client));
+    const inactiveGroups = clientGroups.filter((g) => !g.isActive);
+    inactiveGroups.forEach((g) => removedNames.add(g.name));
+
+    const inactivePanel = `
+      <div class="panel">
+        <div class="panel-title">Inactive / Removed Clients</div>
+        <p class="graph-note">Clients with zero active plans right now, plus any that had a literal "Removed" event below. Flashproxy keeps cancelled/expired plans visible rather than deleting them, so most clients end up here instead of as a "Removed" event.</p>
+        ${
+          removedNames.size
+            ? `<table class="data-table">
+                <tr><th>Client</th><th>Status</th></tr>
+                ${[...removedNames]
+                  .map((name) => {
+                    const group = clientGroups.find((g) => g.name === name);
+                    return `<tr><td>${name}</td><td><span class="pill pill-pending">${group ? "Inactive" : "Removed"}</span></td></tr>`;
+                  })
+                  .join("")}
+              </table>`
+            : `<p>No inactive or removed clients.</p>`
+        }
+      </div>
+    `;
+
+    const eventLogPanel = !entries.length
       ? `<div class="panel"><div class="panel-title">Client History</div><p>No clients added or removed yet. New clients are recorded the next time the Plans tab loads.</p></div>`
       : `
         <div class="panel">
@@ -186,6 +220,8 @@ async function renderHistoryView() {
           </table>
         </div>
       `;
+
+    contentEl.innerHTML = inactivePanel + eventLogPanel;
   } catch (err) {
     contentEl.innerHTML = `
       <div class="panel">
