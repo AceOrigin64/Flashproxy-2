@@ -40,8 +40,8 @@ setTimeout(() => {
   const sharedLogo = document.getElementById("shared-logo");
   sharedLogo.classList.add("on-light");
   sharedLogo.animate(
-    [{ transform: "translateX(-50%) scale(1)" }, { transform: "translateX(-50%) scale(2)" }, { transform: "translateX(-50%) scale(1)" }],
-    { duration: 1800, easing: "ease" }
+    [{ transform: "translateX(-50%) scale(1)" }, { transform: "translateX(-50%) scale(2)" }],
+    { duration: 1800, easing: "ease", fill: "forwards" }
   );
 }, 3200);
 
