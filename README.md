@@ -149,6 +149,10 @@ Testing:
 
 Tested through the purchase of a new proxy plan, and every piece of data is logged onto the dashboard as intended, except for the aforementioned USAGE and METRIC tab, where I have already expressed some technical issues happening that are beyond the scope for me to fix or my AI to help
 
+The Usage Tab seems to load all the valid information, but takes a while to buffer and load those information (screenshot provided above)
+
+And the Metric Tab seems to ignore some changes to the purchased plans (especially residential plans)
+
 Apparently, for the USAGE tab, my AI shows me this error:
 
 "Measured it — not a frontend bug at all. /usage/summary itself takes ~30 seconds on Flashproxy's real server, confirmed by bypassing our proxy entirely and hitting rapi.flashproxy.com directly (also 30s). balance and plans respond in ~0.25-0.3s for comparison. This is a real, heavy server-side aggregation on their end — nothing in our code to fix there.
