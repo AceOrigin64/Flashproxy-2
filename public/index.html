@@ -9,8 +9,8 @@
   <div class="page page-welcome" id="page-welcome">
     <div class="brand-bar">FLASHPROXY</div>
     <main class="hero">
-      <p class="hero-eyebrow">We are Flashproxy</p>
-      <h1 class="hero-title">WELCOME<br />TO YOUR<br />DASHBOARD</h1>
+      <h1 class="hero-title welcome-title">Welcome</h1>
+      <p class="hero-subtitle">To Flashproxy Dashboard</p>
     </main>
   </div>
 
@@ -36,7 +36,7 @@
 
   <div class="page page-app" id="page-app">
     <aside class="sidebar">
-      <div class="sidebar-brand">Flashproxy</div>
+      <div class="sidebar-brand brand-link" id="brand-link">Flashproxy</div>
       <nav class="sidebar-nav">
         <button class="nav-item active" data-view="overview">Overview</button>
         <button class="nav-item" data-view="balance">Balance</button>
@@ -46,6 +46,7 @@
         <button class="nav-item" data-view="sub-users">Sub-Users</button>
         <button class="nav-item" data-view="usage">Usage</button>
       </nav>
+      <button class="sidebar-audit-button hidden" id="audit-log-button">Audit (Admin)</button>
       <button class="sidebar-logout" id="logout-button">Log out</button>
     </aside>
     <main class="app-main">
@@ -54,6 +55,42 @@
         <span class="app-key-badge" id="app-key-badge">Connected</span>
       </header>
       <section id="view-content" class="view-content"></section>
+    </main>
+  </div>
+
+  <div class="page page-admin" id="page-admin">
+    <aside class="sidebar sidebar-admin">
+      <div class="sidebar-brand">Admin Panel</div>
+      <nav class="sidebar-nav">
+        <button class="nav-item admin-nav-item active" data-admin-view="users">Users</button>
+        <button class="nav-item admin-nav-item" data-admin-view="client-info">Client Information</button>
+        <button class="nav-item admin-nav-item" data-admin-view="reseller-info">Reseller Information</button>
+        <button class="nav-item admin-nav-item" data-admin-view="audit-log">Audit Log</button>
+      </nav>
+      <button class="sidebar-history-button" id="history-button">History</button>
+      <button class="sidebar-logout admin-back-button" id="admin-back-button">Back to Dashboard</button>
+    </aside>
+    <main class="app-main admin-main">
+      <header class="app-topbar">
+        <h1 class="app-title admin-title" id="admin-view-title">Users</h1>
+      </header>
+      <section id="admin-view-content" class="view-content"></section>
+    </main>
+  </div>
+
+  <div class="page page-history" id="page-history">
+    <aside class="sidebar sidebar-history">
+      <div class="sidebar-brand">Flashproxy</div>
+      <nav class="sidebar-nav">
+        <button class="nav-item history-nav-item active">Client History</button>
+      </nav>
+      <button class="sidebar-logout history-back-button" id="history-back-button">Back To Admin Panel</button>
+    </aside>
+    <main class="app-main history-main">
+      <header class="app-topbar">
+        <h1 class="app-title history-title">Client History</h1>
+      </header>
+      <section id="history-view-content" class="view-content"></section>
     </main>
   </div>
 
