@@ -218,7 +218,7 @@ async function renderHistoryView() {
       ? `<div class="panel"><div class="panel-title">Client History</div><p>No clients added or removed yet. New clients are recorded the next time the Plans tab loads.</p></div>`
       : `
         <div class="panel">
-          <div class="panel-title">Every Client Added Or Removed</div>
+          <div class="panel-title">Every Active Clients</div>
           <p class="graph-note">Flashproxy's API has no add/remove event log of its own — a "client" here is an end_user_reference tag on a plan. This server watches every Plans fetch and records when a new one first appears, or a previously-seen one disappears. Newest first.</p>
           <table class="data-table">
             <tr><th>Time &amp; Date</th><th>Client</th><th>Event</th></tr>
