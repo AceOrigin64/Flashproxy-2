@@ -27,25 +27,35 @@ function revealLetters(el, stepSeconds = 0.045, baseDelay = 0) {
     .join("<br/>");
 }
 
-revealLetters(document.querySelector("#page-welcome .hero-title"), 0.045, 0.6);
+// Waiting for fonts before starting the letter-by-letter reveal avoids
+// the real, intermittent bug this was glitching on: each letter span
+// gets positioned/animated in whatever font is available at that
+// instant, and if Inter finishes loading mid-animation, every letter
+// reflows to its new (different) width -- a visible jump that only
+// shows up depending on network/cache speed, hence "sometimes". The
+// 3200ms transition timer starts only after this same point too, so a
+// slow font load doesn't eat into how long "Welcome" is actually shown.
+(document.fonts ? document.fonts.ready : Promise.resolve()).then(() => {
+  revealLetters(document.querySelector("#page-welcome .hero-title"), 0.045, 0.6);
 
-setTimeout(() => {
-  welcomePage.classList.add("leaving");
-  loginPage.classList.add("entering");
-  // The logo+text lives outside both pages (fixed, shared), so it never
-  // moves during the page transition -- only this shrink in place,
-  // timed to the same 1.8s duration as the page's own fade/scale. Sits
-  // at 2x on the Welcome page (baked into the fadeUpCenter keyframe),
-  // shrinks to 1x for the Login page. Switches to dark text at the
-  // same moment since Login's background is light (Welcome's is dark
-  // purple, needing white text).
-  const sharedLogo = document.getElementById("shared-logo");
-  sharedLogo.classList.add("on-light");
-  sharedLogo.animate(
-    [{ transform: "translateX(-50%) scale(2)" }, { transform: "translateX(-50%) scale(1.5)" }],
-    { duration: 1800, easing: "ease", fill: "forwards" }
-  );
-}, 3200);
+  setTimeout(() => {
+    welcomePage.classList.add("leaving");
+    loginPage.classList.add("entering");
+    // The logo+text lives outside both pages (fixed, shared), so it never
+    // moves during the page transition -- only this shrink in place,
+    // timed to the same 1.8s duration as the page's own fade/scale. Sits
+    // at 2x on the Welcome page (baked into the fadeUpCenter keyframe),
+    // shrinks to 1x for the Login page. Switches to dark text at the
+    // same moment since Login's background is light (Welcome's is dark
+    // purple, needing white text).
+    const sharedLogo = document.getElementById("shared-logo");
+    sharedLogo.classList.add("on-light");
+    sharedLogo.animate(
+      [{ transform: "translateX(-50%) scale(2)" }, { transform: "translateX(-50%) scale(1.5)" }],
+      { duration: 1800, easing: "ease", fill: "forwards" }
+    );
+  }, 3200);
+});
 
 // ---------------------------------------------------------------------
 // API client -- fetches this same server's /api/* route, which proxies
