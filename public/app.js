@@ -35,7 +35,15 @@ function revealLetters(el, stepSeconds = 0.045, baseDelay = 0) {
 // shows up depending on network/cache speed, hence "sometimes". The
 // 3200ms transition timer starts only after this same point too, so a
 // slow font load doesn't eat into how long "Welcome" is actually shown.
-(document.fonts ? document.fonts.ready : Promise.resolve()).then(() => {
+//
+// Also waits for the logo's own entrance animation to finish (its CSS
+// delay + duration, 100ms + 700ms) plus 500ms, so "Welcome" only
+// starts revealing once the logo has visibly settled.
+const LOGO_ENTRANCE_END_MS = 100 + 700;
+const fontsReady = document.fonts ? document.fonts.ready : Promise.resolve();
+const logoSettled = new Promise((resolve) => setTimeout(resolve, LOGO_ENTRANCE_END_MS + 500));
+
+Promise.all([fontsReady, logoSettled]).then(() => {
   revealLetters(document.querySelector("#page-welcome .hero-title"), 0.045, 0.6);
 
   setTimeout(() => {
