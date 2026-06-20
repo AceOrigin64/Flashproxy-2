@@ -35,7 +35,18 @@ function revealLetters(el, stepSeconds = 0.045, baseDelay = 0) {
 // shows up depending on network/cache speed, hence "sometimes". The
 // 3200ms transition timer starts only after this same point too, so a
 // slow font load doesn't eat into how long "Welcome" is actually shown.
-(document.fonts ? document.fonts.ready : Promise.resolve()).then(() => {
+//
+// Raced against a 1.5s timeout: gating the entire entrance (including
+// the logo's pop/shrink animation and the page transition) behind
+// document.fonts.ready with no fallback meant a slow font CDN, an
+// ad-blocker interfering with the Google Fonts request, or any browser
+// quirk where that promise resolves late would leave the logo stuck at
+// rest and the whole sequence silently never firing -- exactly the
+// "doesn't always animate properly" symptom.
+const fontsReady = document.fonts ? document.fonts.ready : Promise.resolve();
+const fontsReadyOrTimeout = Promise.race([fontsReady, new Promise((resolve) => setTimeout(resolve, 1500))]);
+
+fontsReadyOrTimeout.then(() => {
   revealLetters(document.querySelector("#page-welcome .hero-title"), 0.045, 0.6);
 
   setTimeout(() => {
@@ -50,6 +61,15 @@ function revealLetters(el, stepSeconds = 0.045, baseDelay = 0) {
     // purple, needing white text).
     const sharedLogo = document.getElementById("shared-logo");
     sharedLogo.classList.add("on-light");
+    // The CSS entrance animation (fadeUpCenter) is long finished by now
+    // but its `animation` property is still attached and holding both
+    // opacity and transform via fill:both -- clearing it removes any
+    // ambiguity about which animation (CSS vs. this Web Animations API
+    // one) wins when both target `transform`. Re-set opacity manually
+    // first since the base (pre-animation) CSS rule is opacity:0 --
+    // without this the logo would vanish for the whole pop animation.
+    sharedLogo.style.animation = "none";
+    sharedLogo.style.opacity = "1";
     sharedLogo.animate(
       [{ transform: "translateX(-50%) scale(2)" }, { transform: "translateX(-50%) scale(1.5)" }],
       { duration: 1800, easing: "ease", fill: "forwards" }
