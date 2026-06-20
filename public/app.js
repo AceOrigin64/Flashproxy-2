@@ -1262,12 +1262,42 @@ const RENDERERS = {
 
 
   usage: async () => {
-    const usage = await getUsageCached("day");
+    const [usage, plansResp] = await Promise.all([
+      getUsageCached("day"),
+      apiGet("/plans?per_page=100"),
+    ]);
+
+    const groups = {};
+    plansResp.plans.forEach((p) => {
+      const key = p.end_user_reference || "Unassigned";
+      if (!groups[key]) groups[key] = { name: key, plans: [] };
+      groups[key].plans.push(p);
+    });
+    const clientUsage = Object.values(groups).map((g) => {
+      const bytesUsed = g.plans.reduce((sum, p) => sum + (p.limits?.bytes_used || 0), 0);
+      const maxBytes = g.plans.reduce((sum, p) => sum + (p.limits?.max_bytes || 0), 0);
+      return { name: g.name, bytesUsed, maxBytes, planCount: g.plans.length };
+    });
+
     return `
-      <div class="cards-grid">${statCard("Total Bandwidth", formatBytes(usage.summary?.total_bytes), `This ${usage.time_range?.period}`)}</div>
-      ${usageGraph(usage)}
       <div class="panel">
-        <div class="panel-title">By Product</div>
+        <div class="panel-title">Data Usage By Client</div>
+        ${
+          clientUsage.length
+            ? `<table class="data-table">
+                <tr><th>Client</th><th>Used</th><th>Remaining</th><th>Plans</th></tr>
+                ${clientUsage
+                  .map((c) => {
+                    const remaining = c.maxBytes ? formatBytes(Math.max(0, c.maxBytes - c.bytesUsed)) : "&mdash;";
+                    return `<tr><td>${c.name}</td><td>${formatBytes(c.bytesUsed)}</td><td>${remaining}</td><td>${c.planCount}</td></tr>`;
+                  })
+                  .join("")}
+              </table>`
+            : `<p>No clients yet.</p>`
+        }
+      </div>
+      <div class="panel">
+        <div class="panel-title">Data Usage By Category</div>
         <table class="data-table">
           <tr><th>Product</th><th>Used</th><th>Plans</th></tr>
           ${Object.entries(usage.by_product || {})
@@ -1275,6 +1305,7 @@ const RENDERERS = {
             .join("")}
         </table>
       </div>
+      ${usageGraph(usage)}
     `;
   },
 };
