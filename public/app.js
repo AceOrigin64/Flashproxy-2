@@ -94,7 +94,7 @@ Promise.all([fontsReadyOrTimeout, logoEntranceDone]).then(() => {
       [{ transform: "translateX(-50%) scale(2)" }, { transform: "translateX(-50%) scale(1.5)" }],
       { duration: 1800, easing: "ease", fill: "forwards" }
     );
-  }, 3200);
+  }, 2600);
 });
 
 // ---------------------------------------------------------------------
