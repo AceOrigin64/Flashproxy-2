@@ -55,7 +55,18 @@ function revealLetters(el, stepSeconds = 0.045, baseDelay = 0) {
 const fontsReady = document.fonts ? document.fonts.ready : Promise.resolve();
 const fontsReadyOrTimeout = Promise.race([fontsReady, new Promise((resolve) => setTimeout(resolve, 1500))]);
 
-fontsReadyOrTimeout.then(() => {
+// The logo's entrance is a pure CSS animation (100ms delay + 700ms
+// duration = settles at 800ms) running on its own clock, independent
+// of fonts/JS. Without this explicit wait, a fast fonts.ready
+// resolution (warm cache, fonts already loaded from a previous visit)
+// could fire the Welcome reveal at ~0ms, overlapping the still-running
+// logo entrance instead of strictly following it -- the "appears
+// together sometimes" bug. This guarantees Welcome never starts before
+// the logo has had its full 800ms to settle, regardless of how fast
+// everything else resolves.
+const logoEntranceDone = new Promise((resolve) => setTimeout(resolve, 800));
+
+Promise.all([fontsReadyOrTimeout, logoEntranceDone]).then(() => {
   revealLetters(document.querySelector("#page-welcome .hero-title"), 0.045, 0.6);
 
   setTimeout(() => {
