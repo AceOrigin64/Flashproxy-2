@@ -25,6 +25,15 @@ function revealLetters(el, stepSeconds = 0.045, baseDelay = 0) {
         .join("")
     )
     .join("<br/>");
+  // The raw text node sits visible in the DOM the instant HTML parses,
+  // well before this (deferred) script runs and swaps it into letter
+  // spans -- without this, the full word flashes visible-then-hidden
+  // right before the reveal, which is the real "appears too early,
+  // glitches" bug. el starts hidden via inline style="visibility:hidden"
+  // in the HTML itself (not just a CSS rule, so it's not racing against
+  // the external stylesheet either); this un-hides it only once the
+  // letters are actually in their pre-animation (opacity:0) state.
+  el.style.visibility = "visible";
 }
 
 // Waiting for fonts before starting the letter-by-letter reveal avoids
